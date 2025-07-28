@@ -926,38 +926,68 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global Firebase variables
+        // --- Firebase Configuration (IMPORTANT: REPLACE WITH YOUR OWN) ---
+        // If you are deploying this to a public website (like GitHub Pages),
+        // you MUST replace these placeholder values with your actual Firebase project configuration.
+        // You can find this in your Firebase project settings -> Project settings -> General -> Your apps -> Web app.
+        const firebaseConfigForDeployment = {
+            apiKey: "YOUR_API_KEY", // Replace with your actual API Key
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com", // Replace with your actual Auth Domain
+            projectId: "YOUR_PROJECT_ID", // Replace with your actual Project ID
+            storageBucket: "YOUR_PROJECT_ID.appspot.com", // Replace with your actual Storage Bucket
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // Replace with your actual Messaging Sender ID
+            appId: "YOUR_APP_ID" // Replace with your actual App ID
+        };
+
+        // For GitHub Pages, we'll use a simple, static app ID.
+        // For Canvas, __app_id is provided by the environment.
+        const deploymentAppId = "vocabulary-quiz-app-public"; // A unique ID for your app's public data
+
+        // --- Global Firebase variables ---
         let app;
         let db;
         let auth;
         let userId;
-        let appId; // Will be set from __app_id
+        let appId; // Will be set based on environment (__app_id or deploymentAppId)
 
         // Initialize Firebase and authenticate
         async function initializeFirebase() {
             try {
-                // Use __app_id and __firebase_config from the Canvas environment
-                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                const firebaseConfigString = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
-                console.log("Raw __firebase_config string:", firebaseConfigString); // Added for debugging
-                const firebaseConfig = JSON.parse(firebaseConfigString);
+                // Determine Firebase config and app ID based on environment
+                let currentFirebaseConfig;
+                let currentInitialAuthToken;
 
-                if (Object.keys(firebaseConfig).length === 0) {
-                    console.error("Firebase config not found. Please ensure __firebase_config is set.");
-                    showModal("Error", "Firebase configuration is missing. Please contact support.", "alert");
+                if (typeof __firebase_config !== 'undefined' && typeof __app_id !== 'undefined') {
+                    // Running in Canvas environment
+                    currentFirebaseConfig = JSON.parse(__firebase_config);
+                    appId = __app_id;
+                    currentInitialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                    console.log("Running in Canvas environment.");
+                } else {
+                    // Running outside Canvas (e.g., GitHub Pages)
+                    currentFirebaseConfig = firebaseConfigForDeployment;
+                    appId = deploymentAppId;
+                    currentInitialAuthToken = null; // No custom token outside Canvas for this setup
+                    console.log("Running in public deployment environment (GitHub Pages etc.).");
+                }
+
+                if (Object.keys(currentFirebaseConfig).length === 0 || !currentFirebaseConfig.apiKey || currentFirebaseConfig.apiKey === "YOUR_API_KEY") {
+                    console.error("Firebase config not found or is placeholder. Please ensure it's set correctly.");
+                    showModal("Error", "Firebase configuration is missing or is using placeholder values. Please update the `firebaseConfigForDeployment` in the code with your actual Firebase project details.", "alert");
                     return;
                 }
-                console.log("Parsed Firebase config:", firebaseConfig); // Added for debugging
+                console.log("Using Firebase config:", currentFirebaseConfig);
+                console.log("Using App ID:", appId);
 
-                app = initializeApp(firebaseConfig);
+                app = initializeApp(currentFirebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
 
                 // Authenticate user
-                if (typeof __initial_auth_token !== 'undefined') {
-                    await signInWithCustomToken(auth, __initial_auth_token);
+                if (currentInitialAuthToken) {
+                    await signInWithCustomToken(auth, currentInitialAuthToken);
                 } else {
-                    await signInAnonymously(auth);
+                    await signInAnonymously(auth); // Fallback to anonymous sign-in for public deployment
                 }
 
                 onAuthStateChanged(auth, (user) => {
@@ -979,7 +1009,7 @@
                 console.error("Error initializing Firebase or authenticating:", error);
                 // Log the full error object for more details
                 console.error("Full error object:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
-                showModal("Initialization Error", `Failed to initialize app: ${error.message}`, "alert");
+                showModal("Initialization Error", `Failed to initialize app: ${error.message}. Please check your Firebase configuration.`, "alert");
                 hideLoadingSpinner();
             }
         }
